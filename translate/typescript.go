@@ -1,6 +1,7 @@
 package translate
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"strings"
@@ -124,7 +125,7 @@ var goToTS map[string]string = map[string]string{
 	"bool":    "boolean",
 }
 
-func PropertyFromField(f *ast.Field) Property {
+func PropertyFromField(f *ast.Field) (Property, error) {
 	var doc *string
 	if f.Doc != nil {
 		doc = new(string)
@@ -149,36 +150,40 @@ loop:
 			pt = pt.Inner
 			star = exp.Elt
 		default:
-			panic(fmt.Sprintf("not a type identifier: %+v", star))
+			return Property{}, fmt.Errorf("not a type identifier: %+v", star)
 		}
 	}
 
 	var name string
 	for _, n := range f.Names {
 		if len(name) > 0 {
-			panic(fmt.Sprintf("multiple names found: %s", f.Names))
+			return Property{}, fmt.Errorf("multiple names found: %s", f.Names)
 		}
 		name = n.Name
 	}
 	if len(name) < 1 {
-		panic("field with no name")
+		return Property{}, errors.New("field with no name")
 	}
 	return Property{
 		Name: name,
 		Doc:  doc,
 		Type: t,
-	}
+	}, nil
 }
 
-func StructureFromType(t *ast.TypeSpec) *Structure {
+func StructureFromType(t *ast.TypeSpec) (*Structure, error) {
 	s, ok := t.Type.(*ast.StructType)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	name := t.Name.Name
 	fields := make([]Property, s.Fields.NumFields())
 	for i, field := range s.Fields.List {
-		fields[i] = PropertyFromField(field)
+		f, err := PropertyFromField(field)
+		if err != nil {
+			return nil, fmt.Errorf("parsing struct '%s': %w", name, err)
+		}
+		fields[i] = f
 	}
 
 	var doc *string
@@ -191,5 +196,5 @@ func StructureFromType(t *ast.TypeSpec) *Structure {
 		Name:   name,
 		Doc:    doc,
 		Fields: fields,
-	}
+	}, nil
 }

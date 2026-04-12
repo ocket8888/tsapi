@@ -33,7 +33,9 @@ func GetStructNames(contents []byte) ([]translate.Structure, error) {
 				continue
 			}
 
-			if s := translate.StructureFromType(ts); s != nil {
+			if s, err := translate.StructureFromType(ts); err != nil {
+				return nil, fmt.Errorf("parsing file: %w", err)
+			} else if s != nil {
 				structs = append(structs, *s)
 			}
 		}
