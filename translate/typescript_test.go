@@ -111,3 +111,77 @@ func TestType_ToTypeScript_InnerError(t *testing.T) {
 	}
 	t.Logf("received expected error: %v", err)
 }
+
+func ExampleProperty_ToTypeScript() {
+	p := Property{
+		Name: "foo",
+		Type: Type{
+			Name:     "string",
+			Optional: true,
+			Nullable: true,
+		},
+	}
+
+	out, _ := p.ToTypeScript(0)
+	fmt.Println(out)
+	// Output: foo?: string | null;
+}
+
+func TestProperty_ToTypeScript_indentation(t *testing.T) {
+	p := Property{
+		Name: "foo",
+		Type: Type{
+			Name:     "string",
+			Optional: true,
+			Nullable: true,
+		},
+	}
+
+	SetIndent("  ")
+	out, err := p.ToTypeScript(3)
+	if err != nil {
+		t.Fatalf("failed to convert property to TypeScript: %v", err)
+	}
+	if !equal(t, out, "      foo?: string | null;") {
+		t.FailNow()
+	}
+}
+
+func ExampleStructure_ToTypeScript() {
+	doc := "Foo is an example struct."
+	s := Structure{
+		Name: "Foo",
+		Doc:  &doc,
+		Fields: []Property{
+			{
+				Name: "Bar",
+				Type: Type{
+					Array:    true,
+					Optional: true,
+					Inner: &Type{
+						Name:     "string",
+						Nullable: true,
+					},
+				},
+			},
+			{
+				Name: "Test",
+				Type: Type{
+					Name:     "number",
+					Nullable: true,
+				},
+			},
+		},
+	}
+
+	SetIndent("  ")
+	out, _ := s.ToTypeScript(0)
+	fmt.Println(out)
+	// Output: /**
+	//  * Foo is an example struct.
+	//  */
+	// interface Foo {
+	//   Bar?: Array<string | null>;
+	//   Test: number | null;
+	// }
+}

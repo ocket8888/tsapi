@@ -51,14 +51,14 @@ func TypeFromIdent(i *ast.Ident) Type {
 	}
 }
 
-func docToString(doc *string) string {
+func docToString(doc *string, indent string) string {
 	var ret string
 	if doc != nil {
-		ret = "/**"
+		ret = indent + "/**\n"
 		for _, line := range strings.Split(*doc, "\n") {
-			ret += " * " + line
+			ret += indent + " * " + line
 		}
-		ret += "\n */\n"
+		ret += "\n" + indent + " */\n"
 	}
 	return ret
 }
@@ -69,13 +69,18 @@ type Property struct {
 	Type Type
 }
 
-func (p Property) ToTypeScript() (string, error) {
-	ret := docToString(p.Doc)
+func (p Property) ToTypeScript(indentLevel uint) (string, error) {
+	ident := ""
+	for range indentLevel {
+		ident += indent
+	}
+
+	ret := docToString(p.Doc, ident)
 	t, err := p.Type.ToTypeScript()
 	if err != nil {
 		return "", fmt.Errorf("converting type of field '%s' to string: %w", p.Name, err)
 	}
-	return ret + p.Name + t, nil
+	return ret + ident + p.Name + t, nil
 }
 
 type Structure struct {
@@ -84,24 +89,39 @@ type Structure struct {
 	Fields []Property
 }
 
-func (s Structure) ToTypeScript() (string, error) {
-	ret := docToString(s.Doc) + "interface " + s.Name + "{\n"
+func (s Structure) ToTypeScript(indentLevel uint) (string, error) {
+	ident := ""
+	for range indentLevel {
+		ident += indent
+	}
+	var ret strings.Builder
+	ret.WriteString(docToString(s.Doc, ident) + ident + "interface " + s.Name + " {")
 	for _, field := range s.Fields {
-		f, err := field.ToTypeScript()
+		ret.WriteRune('\n')
+		f, err := field.ToTypeScript(indentLevel + 1)
 		if err != nil {
 			return "", fmt.Errorf("converting field '%s' to string: %w", field.Name, err)
 		}
-		for _, line := range strings.Split(f, "\n") {
-			ret += "\t" + line + "\n"
-		}
+		ret.WriteString(f)
 	}
-	return ret + "\n}", nil
+	return ret.String() + ident + "\n}", nil
 }
 
 var goToTS map[string]string = map[string]string{
-	"int":    "number",
-	"string": "string",
-	"bool":   "boolean",
+	"int":     "number",
+	"int8":    "number",
+	"int16":   "number",
+	"int32":   "number",
+	"int64":   "number",
+	"uint":    "number",
+	"uint8":   "number",
+	"uint16":  "number",
+	"uint32":  "number",
+	"uint64":  "number",
+	"float32": "number",
+	"float64": "number",
+	"string":  "string",
+	"bool":    "boolean",
 }
 
 func PropertyFromField(f *ast.Field) Property {
@@ -118,10 +138,10 @@ loop:
 	for {
 		switch exp := star.(type) {
 		case *ast.Ident:
-			*pt = TypeFromIdent(exp)
+			pt.Name = TypeFromIdent(exp).Name
 			break loop
 		case *ast.StarExpr:
-			*&pt.Nullable = true
+			pt.Nullable = true
 			star = exp.X
 		case *ast.ArrayType:
 			pt.Array = true

@@ -86,7 +86,7 @@ func main() {
 
 	var returnCode uint8 = 0
 	for _, s := range structs {
-		out, err := s.ToTypeScript()
+		out, err := s.ToTypeScript(0)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "converting structure '%s' to a string: %v", s.Name, err)
 			// "handles" overflow
@@ -96,7 +96,7 @@ func main() {
 			continue
 		}
 		fmt.Println(out)
-		fmt.Println(out)
+		fmt.Println()
 	}
 
 	os.Exit(int(returnCode))
