@@ -40,10 +40,42 @@ func (t Type) ToTypeScript() (string, error) {
 	return ret + ";", nil
 }
 
+func TypeFromIdent(i *ast.Ident) Type {
+	ts, ok := goToTS[i.Name]
+	if !ok {
+		ts = "unknown"
+	}
+
+	return Type{
+		Name: ts,
+	}
+}
+
+func docToString(doc *string) string {
+	var ret string
+	if doc != nil {
+		ret = "/**"
+		for _, line := range strings.Split(*doc, "\n") {
+			ret += " * " + line
+		}
+		ret += "\n */\n"
+	}
+	return ret
+}
+
 type Property struct {
 	Name string
 	Doc  *string
-	Type string
+	Type Type
+}
+
+func (p Property) ToTypeScript() (string, error) {
+	ret := docToString(p.Doc)
+	t, err := p.Type.ToTypeScript()
+	if err != nil {
+		return "", fmt.Errorf("converting type of field '%s' to string: %w", p.Name, err)
+	}
+	return ret + p.Name + t, nil
 }
 
 type Structure struct {
@@ -52,9 +84,24 @@ type Structure struct {
 	Fields []Property
 }
 
+func (s Structure) ToTypeScript() (string, error) {
+	ret := docToString(s.Doc) + "interface " + s.Name + "{\n"
+	for _, field := range s.Fields {
+		f, err := field.ToTypeScript()
+		if err != nil {
+			return "", fmt.Errorf("converting field '%s' to string: %w", field.Name, err)
+		}
+		for _, line := range strings.Split(f, "\n") {
+			ret += "\t" + line + "\n"
+		}
+	}
+	return ret + "\n}", nil
+}
+
 var goToTS map[string]string = map[string]string{
 	"int":    "number",
 	"string": "string",
+	"bool":   "boolean",
 }
 
 func PropertyFromField(f *ast.Field) Property {
@@ -64,25 +111,26 @@ func PropertyFromField(f *ast.Field) Property {
 		*doc = f.Doc.Text()
 	}
 
-	var i *ast.Ident
+	var t Type
+	pt := &t
 	var star ast.Expr = f.Type
-	for i == nil {
-		fmt.Printf("%T\n", star)
+loop:
+	for {
 		switch exp := star.(type) {
 		case *ast.Ident:
-			i = exp
+			*pt = TypeFromIdent(exp)
+			break loop
 		case *ast.StarExpr:
+			*&pt.Nullable = true
 			star = exp.X
 		case *ast.ArrayType:
+			pt.Array = true
+			pt.Inner = new(Type)
+			pt = pt.Inner
 			star = exp.Elt
 		default:
-			panic(fmt.Sprintf("not a type identifier: %s", f.Type))
+			panic(fmt.Sprintf("not a type identifier: %+v", star))
 		}
-	}
-
-	ts, ok := goToTS[i.Name]
-	if !ok {
-		ts = "unknown"
 	}
 
 	var name string
@@ -98,7 +146,7 @@ func PropertyFromField(f *ast.Field) Property {
 	return Property{
 		Name: name,
 		Doc:  doc,
-		Type: ts,
+		Type: t,
 	}
 }
 
